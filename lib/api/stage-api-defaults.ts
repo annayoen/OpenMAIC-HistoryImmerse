@@ -14,6 +14,7 @@ import type {
   QuizContent,
   InteractiveContent,
   PBLContent,
+  ScenarioDialogueContent,
 } from '@/lib/types/stage';
 
 // ==================== Utility Functions ====================
@@ -107,6 +108,39 @@ export function createDefaultPBLContent(): PBLContent {
 }
 
 /**
+ * Create default ScenarioDialogueContent
+ */
+export function createDefaultScenarioDialogueContent(): ScenarioDialogueContent {
+  return {
+    type: 'scenario-dialogue',
+    topic: '',
+    historicalBackground: '',
+    characters: [],
+    commentator: {
+      id: 'commentator',
+      name: '博言',
+      role: 'commentator',
+      persona: '客观中立的评论员，擅长从多角度分析历史事件',
+      avatar: '/avatars/assist.png',
+      color: '#10b981',
+      priority: 6,
+      allowedActions: [],
+    },
+    guide: {
+      id: 'guide',
+      name: '启悦',
+      role: 'guide',
+      persona: '善于引导讨论、激发思考的学习引导员',
+      avatar: '/avatars/teacher.png',
+      color: '#f59e0b',
+      priority: 7,
+      allowedActions: [],
+    },
+    openingDialogue: [],
+  };
+}
+
+/**
  * Create default Content based on type
  */
 export function createDefaultContent(type: SceneType): SceneContent {
@@ -119,6 +153,8 @@ export function createDefaultContent(type: SceneType): SceneContent {
       return createDefaultInteractiveContent();
     case 'pbl':
       return createDefaultPBLContent();
+    case 'scenario-dialogue':
+      return createDefaultScenarioDialogueContent();
     default:
       throw new Error(`Unknown scene type: ${type}`);
   }
