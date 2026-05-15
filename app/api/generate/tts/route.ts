@@ -77,9 +77,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const apiKey = clientBaseUrl
-      ? ttsApiKey || ''
-      : resolveTTSApiKey(ttsProviderId, ttsApiKey || undefined);
+    // Resolve API key: server env var takes priority, then client key
+    const serverApiKey = resolveTTSApiKey(ttsProviderId, undefined);
+    const apiKey = serverApiKey || ttsApiKey || '';
     const baseUrl = clientBaseUrl
       ? clientBaseUrl
       : resolveTTSBaseUrl(ttsProviderId, ttsBaseUrl || undefined);
