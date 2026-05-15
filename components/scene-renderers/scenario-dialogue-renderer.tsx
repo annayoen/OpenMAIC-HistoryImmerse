@@ -105,20 +105,15 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
 
       {/* Agent Cards */}
       <div className="px-6 py-3 border-b bg-muted/30">
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-nowrap gap-3 overflow-x-auto justify-center">
           {allAgents.map((agent) => (
             <div
               key={agent.id}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background border shadow-sm"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background border shadow-sm shrink-0"
+              title={getRoleLabel(agent.role)}
             >
               <AgentAvatar name={agent.name} color={agent.color} role={agent.role} size="sm" />
-              <div className="min-w-0">
-                <div className="text-xs font-medium truncate">{agent.name}</div>
-                <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  {getAgentIcon(agent.role)}
-                  <span className="truncate">{getRoleLabel(agent.role)}</span>
-                </div>
-              </div>
+              <div className="text-xs font-medium whitespace-nowrap">{agent.name}</div>
             </div>
           ))}
         </div>
@@ -140,7 +135,7 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
             key={msg.id}
             className={cn(
               'flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300',
-              msg.speakerRole === 'guide' && 'justify-center',
+              msg.speakerRole === 'guide' && 'justify-end',
             )}
           >
             {msg.speakerRole !== 'guide' && (
@@ -154,7 +149,6 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
             <div
               className={cn(
                 'flex-1 max-w-[80%]',
-                msg.speakerRole === 'guide' && 'max-w-[90%]',
               )}
             >
               <div className={cn(
