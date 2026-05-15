@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { animate, motion, MotionConfig, useReducedMotion } from 'motion/react';
-import { FileText, HelpCircle, Gamepad2, Puzzle } from 'lucide-react';
+import { FileText, HelpCircle, Gamepad2, Puzzle, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useStageStore } from '@/lib/store';
@@ -15,9 +15,10 @@ const SCENE_TYPE_ICONS: Record<SceneType, typeof FileText> = {
   quiz: HelpCircle,
   interactive: Gamepad2,
   pbl: Puzzle,
+  'scenario-dialogue': MessageSquare,
 };
 
-const TYPE_ORDER: SceneType[] = ['slide', 'quiz', 'interactive', 'pbl'];
+const TYPE_ORDER: SceneType[] = ['slide', 'quiz', 'interactive', 'pbl', 'scenario-dialogue'];
 
 const CONFETTI_COLORS = [
   '#fbbf24',
