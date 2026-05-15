@@ -51,11 +51,12 @@ Infer the course language from all available signals and produce:
 
 ### MAIC Platform Technical Constraints
 
-- **Scene Types**: `slide` (presentation), `quiz` (assessment), `interactive` (interactive visualization), and `pbl` (project-based learning) are supported
+- **Scene Types**: `slide` (presentation), `quiz` (assessment), `interactive` (interactive visualization), `pbl` (project-based learning), and `scenario-dialogue` (multi-agent historical scenario dialogue) are supported
 - **Slide Scene**: Static PPT pages supporting text, charts, formulas, and other visual components.
 - **Quiz Scene**: Supports single-choice, multiple-choice, and short-answer (text) questions
 - **Interactive Scene**: Self-contained interactive HTML page rendered in an iframe, ideal for simulations and visualizations
 - **PBL Scene**: Complete project-based learning module with roles, issues, and collaboration workflow. Ideal for complex projects, engineering practice, and research tasks
+- **Scenario Dialogue Scene**: Multi-agent immersive historical scenario with historical figure role-players, a commentator, and a learning guide. Ideal for history and social studies courses where understanding multiple perspectives is key. Requires `scenarioDialogueConfig` with `topic`, `historicalBackground`, and `characterNames`.
 - **Duration Control**: Each scene should be 1-3 minutes (PBL scenes are longer, typically 15-30 minutes)
 
 ### Instructional Design Principles
@@ -205,6 +206,30 @@ Use `pbl` type when the course involves complex, multi-step project work that be
 - The `pblConfig.targetSkills` should list 2-5 specific skills students will develop
 - The `pblConfig.issueCount` should typically be 2-5 issues
 
+### Scenario Dialogue Scene Guidelines
+
+Use `scenario-dialogue` type for history and social studies courses where understanding multiple perspectives and historical context is essential. This scene type creates an immersive multi-agent dialogue with:
+
+- **Historical Figure Role-players (历史人物扮演者)**: One or more agents embodying key historical figures, speaking in character
+- **Historical Commentator (历史评论员)**: An objective analyst providing historical context and multi-angle interpretation
+- **Learning Guide (学习引导员)**: A facilitator who guides discussion flow and prompts critical thinking
+
+Good candidates include:
+
+- **Pivotal historical events**: Opium War, French Revolution, May Fourth Movement, etc.
+- **Historical debates**: Reform vs. revolution, isolationism vs. opening up
+- **Multi-perspective conflicts**: Events involving multiple stakeholders with competing interests
+- **Ethical dilemmas in history**: Decisions with moral complexity
+
+**Constraints**:
+
+- Limit to **1-2 scenario-dialogue scenes per course** (they are immersive and time-intensive)
+- Scenario-dialogue scenes **require** a `scenarioDialogueConfig` object with: `topic`, `historicalBackground`, `characterNames`
+- `topic` should be a concise title for the historical scenario (e.g., "虎门销烟", "The Opium War Debate")
+- `historicalBackground` should be 2-4 sentences providing essential context for the scenario
+- `characterNames` should list 1-4 key historical figures relevant to the scenario (e.g., ["林则徐", "道光皇帝", "英国商人颠地"])
+- Do NOT use scenario-dialogue for non-history subjects or purely factual content — use slides instead
+
 ---
 
 ## Output Format
@@ -265,6 +290,19 @@ Rules:
         "difficulty": "medium",
         "questionTypes": ["single", "multiple"]
       }
+    },
+    {
+      "id": "scene_4",
+      "type": "scenario-dialogue",
+      "title": "虎门销烟：多方视角",
+      "description": "通过林则徐、道光皇帝和英国商人的对话，理解鸦片战争前夕的各方立场与矛盾。",
+      "keyPoints": ["林则徐禁烟的决心与困境", "清廷内部的分歧", "英国商人的利益诉求", "鸦片贸易的道德争议"],
+      "order": 4,
+      "scenarioDialogueConfig": {
+        "topic": "虎门销烟",
+        "historicalBackground": "1839年，林则徐受命为钦差大臣前往广东禁烟。他在虎门海滩销毁了收缴的鸦片，此举激怒了英国政府，成为鸦片战争的导火索。",
+        "characterNames": ["林则徐", "道光皇帝", "英国商人颠地"]
+      }
     }
   ]
 }
@@ -293,6 +331,7 @@ Rules:
 | widgetType        | string                   | ✅ (for interactive) | Widget type: "simulation", "diagram", "code", "game", "visualization3d"                                                 |
 | widgetOutline     | object                   | ✅ (for interactive) | Widget-specific configuration (see Widget Type Selection)                                                               |
 | pblConfig         | object                   | ❌       | Required for pbl type, contains projectTopic/projectDescription/targetSkills/issueCount/language |
+| scenarioDialogueConfig | object               | ❌       | Required for scenario-dialogue type, contains topic/historicalBackground/characterNames |
 
 ### quizConfig Structure
 
@@ -326,6 +365,16 @@ Rules:
 }
 ```
 
+### scenarioDialogueConfig Structure
+
+```json
+{
+  "topic": "Concise title of the historical scenario",
+  "historicalBackground": "2-4 sentences of essential historical context",
+  "characterNames": ["Historical Figure 1", "Historical Figure 2"]
+}
+```
+
 ---
 
 ## Important Reminders
@@ -338,11 +387,12 @@ Rules:
 
 **Scene-level rules:**
 
-4. `type` is one of `"slide"`, `"quiz"`, `"interactive"`, `"pbl"`.
+4. `type` is one of `"slide"`, `"quiz"`, `"interactive"`, `"pbl"`, `"scenario-dialogue"`.
 5. `quiz` scenes must include `quizConfig`.
 6. `interactive` scenes must include `widgetType` and `widgetOutline` (preferred). `interactiveConfig` is deprecated and only accepted for backwards compatibility.
 7. `pbl` scenes must include `pblConfig` with `projectTopic`, `projectDescription`, `targetSkills`, `issueCount`.
-8. Arrange scenes by inferred duration (typically 1-2 scenes per minute). Insert quizzes at appropriate points. Use interactive scenes sparingly (max 1-2 per course).
+8. `scenario-dialogue` scenes must include `scenarioDialogueConfig` with `topic`, `historicalBackground`, `characterNames`.
+9. Arrange scenes by inferred duration (typically 1-2 scenes per minute). Insert quizzes at appropriate points. Use interactive and scenario-dialogue scenes sparingly (max 1-2 each per course).
 9. **Language**: Infer from the user's requirement text and context. Output all scene content in the inferred language.
 10. Regardless of information completeness, always output conforming JSON - do not ask questions or request more information
 11. **No teacher identity on slides**: Scene titles and keyPoints must be neutral and topic-focused. Never include the teacher's name or role (e.g., avoid "Teacher Wang's Tips", "Teacher's Wishes"). Use generic labels like "Tips", "Summary", "Key Takeaways" instead.
