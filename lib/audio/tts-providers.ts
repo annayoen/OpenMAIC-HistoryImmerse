@@ -616,13 +616,21 @@ async function generateGLMTTS(config: TTSModelConfig, text: string): Promise<TTS
  * Qwen TTS implementation (DashScope API - Qwen3 TTS Flash)
  */
 async function generateQwenTTS(config: TTSModelConfig, text: string): Promise<TTSGenerationResult> {
-  const baseUrl = config.baseUrl || TTS_PROVIDERS['qwen-tts'].defaultBaseUrl;
+  // Qwen TTS uses the DashScope native API endpoint, not OpenAI-compatible mode
+  // Native: /api/v1/services/aigc/multimodal-generation/generation
+  // Compatible: /compatible-mode/v1/... (for LLM only)
+  const baseUrl = config.baseUrl || TTS_PROVIDERS['qwen-tts'].defaultBaseUrl!;
+
+  // Convert compatible-mode URL to native API URL if needed
+  const ttsBaseUrl = baseUrl.includes('/compatible-mode/v1')
+    ? baseUrl.replace('/compatible-mode/v1', '/api/v1')
+    : baseUrl;
 
   // Calculate speed: Qwen3 uses rate parameter from -500 to 500
   // speed 1.0 = rate 0, speed 2.0 = rate 500, speed 0.5 = rate -250
   const rate = Math.round(((config.speed || 1.0) - 1.0) * 500);
 
-  const response = await fetch(`${baseUrl}/services/aigc/multimodal-generation/generation`, {
+  const response = await fetch(`${ttsBaseUrl}/services/aigc/multimodal-generation/generation`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
