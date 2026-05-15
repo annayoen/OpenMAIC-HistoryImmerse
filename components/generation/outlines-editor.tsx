@@ -44,7 +44,7 @@ interface OutlinesEditorProps {
   onCollapse?: () => void;
 }
 
-const SCENE_TYPES: SceneType[] = ['slide', 'quiz', 'interactive', 'pbl'];
+const SCENE_TYPES: SceneType[] = ['slide', 'quiz', 'interactive', 'pbl', 'scenario-dialogue'];
 
 const TYPE_THEME: Record<
   SceneType,
@@ -79,6 +79,12 @@ const TYPE_THEME: Record<
     accent: 'bg-amber-500',
     dot: 'bg-amber-400',
   },
+  'scenario-dialogue': {
+    chip: 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300',
+    chipHover: 'hover:bg-rose-100/80 dark:hover:bg-rose-500/15',
+    accent: 'bg-rose-500',
+    dot: 'bg-rose-400',
+  },
 };
 
 function normalizeOrder(outlines: SceneOutline[]): SceneOutline[] {
@@ -98,6 +104,8 @@ function useSceneTypeLabel() {
         return t('generation.sceneTypeInteractive');
       case 'pbl':
         return t('generation.sceneTypePbl');
+      case 'scenario-dialogue':
+        return t('generation.sceneTypeScenarioDialogue');
       case 'slide':
       default:
         return t('generation.sceneTypeSlide');
@@ -150,7 +158,25 @@ export function OutlinesEditor({
 
   const updateOutline = (index: number, updates: Partial<SceneOutline>) => {
     const next = [...outlines];
-    next[index] = { ...next[index], ...updates };
+    const current = next[index];
+
+    // Auto-populate scenarioDialogueConfig when switching to scenario-dialogue type
+    if (
+      updates.type === 'scenario-dialogue' &&
+      !current.scenarioDialogueConfig &&
+      !updates.scenarioDialogueConfig
+    ) {
+      updates = {
+        ...updates,
+        scenarioDialogueConfig: {
+          topic: updates.title ?? current.title ?? '',
+          historicalBackground: updates.description ?? current.description ?? '',
+          characterNames: [],
+        },
+      };
+    }
+
+    next[index] = { ...current, ...updates };
     onChange(normalizeOrder(next));
   };
 
@@ -639,6 +665,11 @@ function SceneRow({
           {outline.type === 'quiz' && !disabled && (
             <QuizConfigDisclosure outline={outline} onUpdate={onUpdate} />
           )}
+
+          {/* Scenario Dialogue config */}
+          {outline.type === 'scenario-dialogue' && !disabled && (
+            <ScenarioDialogueConfigDisclosure outline={outline} onUpdate={onUpdate} />
+          )}
         </div>
       </div>
     </motion.li>
@@ -688,6 +719,17 @@ function EmptyState({
   );
 }
 
+function sceneTypeToI18nKey(type: SceneType): string {
+  const map: Record<SceneType, string> = {
+    slide: 'Slide',
+    quiz: 'Quiz',
+    interactive: 'Interactive',
+    pbl: 'Pbl',
+    'scenario-dialogue': 'ScenarioDialogue',
+  };
+  return map[type];
+}
+
 function TypePill({
   type,
   onChange,
@@ -729,7 +771,7 @@ function TypePill({
             >
               <span className="flex items-center gap-2">
                 <span className={cn('size-2 rounded-full', optionTheme.accent)} />
-                {t(`generation.sceneType${capitalize(option)}`)}
+                {t(`generation.sceneType${sceneTypeToI18nKey(option)}`)}
               </span>
               {option === type && <Check className="size-3.5 text-muted-foreground" />}
             </DropdownMenuItem>
@@ -1049,6 +1091,118 @@ function QuizConfigDisclosure({
                 </button>
               );
             })}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ScenarioDialogueConfigDisclosure({
+  outline,
+  onUpdate,
+}: {
+  outline: SceneOutline;
+  onUpdate: (updates: Partial<SceneOutline>) => void;
+}) {
+  const { t } = useI18n();
+  const config = outline.scenarioDialogueConfig ?? {
+    topic: '',
+    historicalBackground: '',
+    characterNames: [] as string[],
+  };
+  const [charDraft, setCharDraft] = useState('');
+
+  const characterNames = outline.scenarioDialogueConfig?.characterNames ?? [];
+  const characterCount = characterNames.length;
+
+  const updateConfig = (updates: Partial<typeof config>) => {
+    onUpdate({
+      scenarioDialogueConfig: {
+        topic: config.topic ?? '',
+        historicalBackground: config.historicalBackground ?? '',
+        characterNames: config.characterNames ?? [],
+        ...updates,
+      },
+    });
+  };
+
+  const addCharacter = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const next = [...characterNames, trimmed];
+    updateConfig({ characterNames: next });
+    setCharDraft('');
+  };
+
+  const removeCharacter = (idx: number) => {
+    const next = characterNames.filter((_, i) => i !== idx);
+    updateConfig({ characterNames: next });
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium',
+            'text-rose-600 transition-colors hover:bg-rose-500/[0.06] dark:text-rose-300',
+          )}
+        >
+          <span>
+            {characterCount > 0
+              ? t('generation.scenarioDialogueConfigSummary', { count: characterCount })
+              : t('generation.scenarioDialogueConfigHint')}
+          </span>
+          <ChevronDown className="size-3 opacity-70" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={6} className="w-72 space-y-2 p-3">
+        {/* Character Names */}
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            {t('generation.scenarioDialogueCharacters')}
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {(characterNames).map((name, idx) => (
+              <span
+                key={`${name}-${idx}`}
+                className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+              >
+                {name}
+                <button
+                  type="button"
+                  onClick={() => removeCharacter(idx)}
+                  className="inline-flex size-3 items-center justify-center rounded-full text-rose-400 hover:text-rose-600"
+                >
+                  <X className="size-2.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={charDraft}
+              onChange={(e) => setCharDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addCharacter(charDraft);
+                }
+              }}
+              placeholder={t('generation.scenarioDialogueCharacterPlaceholder')}
+              className="flex-1 rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+            />
+            <button
+              type="button"
+              onClick={() => addCharacter(charDraft)}
+              disabled={!charDraft.trim()}
+              className="shrink-0 rounded-md border border-border/50 bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40"
+            >
+              <Plus className="size-3.5" />
+            </button>
           </div>
         </div>
       </PopoverContent>
