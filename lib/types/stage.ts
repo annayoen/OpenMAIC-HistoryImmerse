@@ -4,7 +4,7 @@ import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
 import type { WidgetType, WidgetConfig, TeacherAction } from '@/lib/types/widgets';
 
-export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
+export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl' | 'scenario-dialogue';
 
 export type StageMode = 'autonomous' | 'playback';
 
@@ -94,7 +94,7 @@ export interface Scene {
 /**
  * Scene content based on type
  */
-export type SceneContent = SlideContent | QuizContent | InteractiveContent | PBLContent;
+export type SceneContent = SlideContent | QuizContent | InteractiveContent | PBLContent | ScenarioDialogueContent;
 
 /**
  * Slide content - PPTist Canvas data
@@ -150,6 +150,34 @@ export interface InteractiveContent {
 export interface PBLContent {
   type: 'pbl';
   projectConfig: PBLProjectConfig;
+}
+
+/**
+ * Scenario Dialogue content - Multi-agent historical scenario dialogue
+ */
+export interface ScenarioDialogueAgentConfig {
+  id: string;
+  name: string;
+  role: string;
+  persona: string;
+  avatar: string;
+  color: string;
+  priority: number;
+  allowedActions: string[];
+}
+
+export interface ScenarioDialogueContent {
+  type: 'scenario-dialogue';
+  topic: string;
+  historicalBackground: string;
+  characters: ScenarioDialogueAgentConfig[];
+  commentator: ScenarioDialogueAgentConfig;
+  guide: ScenarioDialogueAgentConfig;
+  openingDialogue: Array<{
+    speakerId: string;
+    speakerName: string;
+    content: string;
+  }>;
 }
 
 // Re-export generation types for convenience
