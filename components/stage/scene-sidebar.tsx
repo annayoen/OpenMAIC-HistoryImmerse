@@ -12,6 +12,7 @@ import {
   AlertCircle,
   RefreshCw,
   Trophy,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThumbnailSlide } from '@/components/slide-renderer/components/ThumbnailSlide';
@@ -98,6 +99,7 @@ export function SceneSidebar({
       quiz: PieChart,
       interactive: MousePointer2,
       pbl: Cpu,
+      'scenario-dialogue': MessageSquare,
     };
     return icons[type] || BookOpen;
   };
@@ -309,6 +311,40 @@ export function SceneSidebar({
                           ))}
                         </div>
                       </div>
+                    ) : scene.type === 'scenario-dialogue' ? (
+                      /* Scenario Dialogue: multi-agent chat preview */
+                      <div className="w-full h-full bg-gradient-to-br from-rose-50 to-amber-50 dark:from-rose-950/30 dark:to-amber-950/20 p-1.5 flex flex-col">
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <div className="flex -space-x-1">
+                            <div className="w-2 h-2 rounded-full bg-rose-400 dark:bg-rose-500 ring-1 ring-white dark:ring-gray-900" />
+                            <div className="w-2 h-2 rounded-full bg-emerald-400 dark:bg-emerald-500 ring-1 ring-white dark:ring-gray-900" />
+                            <div className="w-2 h-2 rounded-full bg-amber-400 dark:bg-amber-500 ring-1 ring-white dark:ring-gray-900" />
+                          </div>
+                          <div className="h-1 w-10 bg-rose-200/60 dark:bg-rose-700/30 rounded-full" />
+                        </div>
+                        <div className="flex-1 flex flex-col gap-1">
+                          <div className="flex items-start gap-1">
+                            <div className="w-2 h-2 rounded-full bg-rose-300 dark:bg-rose-600 shrink-0 mt-0.5" />
+                            <div className="flex-1 space-y-0.5">
+                              <div className="h-1 w-full bg-rose-100/60 dark:bg-rose-800/20 rounded-full" />
+                              <div className="h-1 w-3/4 bg-rose-100/40 dark:bg-rose-800/10 rounded-full" />
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-1">
+                            <div className="w-2 h-2 rounded-full bg-emerald-300 dark:bg-emerald-600 shrink-0 mt-0.5" />
+                            <div className="flex-1 space-y-0.5">
+                              <div className="h-1 w-5/6 bg-emerald-100/60 dark:bg-emerald-800/20 rounded-full" />
+                              <div className="h-1 w-2/3 bg-emerald-100/40 dark:bg-emerald-800/10 rounded-full" />
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-1">
+                            <div className="w-2 h-2 rounded-full bg-amber-300 dark:bg-amber-600 shrink-0 mt-0.5" />
+                            <div className="flex-1 space-y-0.5">
+                              <div className="h-1 w-4/5 bg-amber-100/60 dark:bg-amber-800/20 rounded-full" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       /* Fallback */
                       <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-500">
@@ -362,8 +398,8 @@ export function SceneSidebar({
                       : 'cursor-pointer hover:bg-gray-50/80 dark:hover:bg-gray-800/50',
                     !isFailed && !isActive && 'opacity-60',
                     isActive &&
-                      !isFailed &&
-                      'bg-purple-50 dark:bg-purple-900/20 ring-1 ring-purple-200 dark:ring-purple-700 opacity-100',
+                    !isFailed &&
+                    'bg-purple-50 dark:bg-purple-900/20 ring-1 ring-purple-200 dark:ring-purple-700 opacity-100',
                   )}
                 >
                   {/* Scene Header */}
@@ -476,7 +512,7 @@ export function SceneSidebar({
                     'group relative rounded-lg flex flex-col gap-1 p-1.5 transition-all duration-200 cursor-pointer hover:bg-amber-50/60 dark:hover:bg-amber-900/10',
                     !isActive && 'opacity-80',
                     isActive &&
-                      'bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-700 opacity-100',
+                    'bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-700 opacity-100',
                   )}
                 >
                   <div className="flex justify-between items-center px-2 pt-0.5">
