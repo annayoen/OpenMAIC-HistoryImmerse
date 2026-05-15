@@ -171,6 +171,7 @@ export async function generateSceneOutlinesFromRequirements(
  * Apply type fallbacks for outlines that can't be generated as their declared type.
  * - interactive without interactiveConfig OR widgetType+widgetOutline → slide
  * - pbl without pblConfig or languageModel → slide
+ * - scenario-dialogue without scenarioDialogueConfig → slide
  */
 export function applyOutlineFallbacks(
   outline: SceneOutline,
@@ -188,6 +189,12 @@ export function applyOutlineFallbacks(
   if (outline.type === 'pbl' && (!outline.pblConfig || !hasLanguageModel)) {
     log.warn(
       `PBL outline "${outline.title}" missing pblConfig or languageModel, falling back to slide`,
+    );
+    return { ...outline, type: 'slide' };
+  }
+  if (outline.type === 'scenario-dialogue' && !outline.scenarioDialogueConfig) {
+    log.warn(
+      `Scenario dialogue outline "${outline.title}" missing scenarioDialogueConfig, falling back to slide`,
     );
     return { ...outline, type: 'slide' };
   }
