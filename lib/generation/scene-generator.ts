@@ -14,6 +14,7 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
+  GeneratedScenarioDialogueContent,
   ScientificModel,
   PdfImage,
   ImageMapping,
@@ -282,6 +283,7 @@ export async function generateSceneContent(
   | GeneratedQuizContent
   | GeneratedInteractiveContent
   | GeneratedPBLContent
+  | GeneratedScenarioDialogueContent
   | null
 > {
   const {
@@ -335,6 +337,8 @@ export async function generateSceneContent(
       return generateQuizContent(outline, aiCall, languageDirective);
     case 'pbl':
       return generatePBLSceneContent(outline, languageModel, languageDirective, thinkingConfig);
+    case 'scenario-dialogue':
+      return generateScenarioDialogueContent(outline, aiCall, languageDirective);
     default:
       return null;
   }
@@ -987,6 +991,54 @@ async function generatePBLSceneContent(
   }
 }
 
+async function generateScenarioDialogueContent(
+  outline: SceneOutline,
+  aiCall: AICallFn,
+  languageDirective?: string,
+): Promise<GeneratedScenarioDialogueContent | null> {
+  const config = outline.scenarioDialogueConfig;
+  if (!config) {
+    log.error(`Scenario dialogue outline "${outline.title}" missing scenarioDialogueConfig`);
+    return null;
+  }
+
+  log.info(`Generating scenario dialogue content for: ${outline.title}`);
+
+  const prompts = buildPrompt(PROMPT_IDS.SCENARIO_DIALOGUE_CONTENT, {
+    title: outline.title,
+    description: outline.description,
+    keyPoints: (outline.keyPoints || []).join(', '),
+    topic: config.topic,
+    historicalBackground: config.historicalBackground,
+    characterNames: config.characterNames.join(', '),
+    languageDirective: languageDirective || DEFAULT_LANGUAGE_DIRECTIVE,
+  });
+
+  if (!prompts) {
+    log.error('Scenario dialogue prompt template not found');
+    return null;
+  }
+
+  try {
+    const response = await aiCall(prompts.system, prompts.user);
+    const parsed = parseJsonResponse<GeneratedScenarioDialogueContent>(response);
+
+    if (!parsed || !parsed.topic) {
+      log.error('Failed to parse scenario dialogue content');
+      return null;
+    }
+
+    log.info(
+      `Scenario dialogue generated: ${parsed.characters.length} characters, ${parsed.openingDialogue.length} opening lines`,
+    );
+
+    return parsed;
+  } catch (error) {
+    log.error(`Scenario dialogue generation failed:`, error);
+    return null;
+  }
+}
+
 /**
  * Extract HTML document from AI response.
  * Tries to find <!DOCTYPE html>...</html> first, then falls back to code block extraction.
@@ -1211,7 +1263,8 @@ export async function generateSceneActions(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedScenarioDialogueContent,
   aiCall: AICallFn,
   options: SceneActionsOptions = {},
 ): Promise<Action[]> {
@@ -1646,7 +1699,8 @@ export function createSceneWithActions(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedScenarioDialogueContent,
   actions: Action[],
   api: ReturnType<typeof createStageAPI>,
 ): string | null {
@@ -1727,6 +1781,26 @@ export function createSceneWithActions(
       content: {
         type: 'pbl',
         projectConfig: content.projectConfig,
+      },
+      actions,
+    });
+
+    return sceneResult.success ? (sceneResult.data ?? null) : null;
+  }
+
+  if (outline.type === 'scenario-dialogue' && 'topic' in content) {
+    const sceneResult = api.scene.create({
+      type: 'scenario-dialogue',
+      title: outline.title,
+      order: outline.order,
+      content: {
+        type: 'scenario-dialogue',
+        topic: content.topic,
+        historicalBackground: content.historicalBackground,
+        characters: content.characters,
+        commentator: content.commentator,
+        guide: content.guide,
+        openingDialogue: content.openingDialogue,
       },
       actions,
     });
