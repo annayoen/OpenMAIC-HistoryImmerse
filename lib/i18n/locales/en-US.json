@@ -152,7 +152,8 @@
       "slide": "pages",
       "quiz": "quizzes",
       "interactive": "interactives",
-      "pbl": "projects"
+      "pbl": "projects",
+      "scenario-dialogue": "dialogues"
     },
     "quizScoreLabel": "{{correct}} / {{total}} correct",
     "encouragement": {
@@ -291,6 +292,14 @@
       }
     }
   },
+  "scenarioDialogue": {
+    "waitingForDialogue": "Waiting for dialogue to begin...",
+    "inputPlaceholder": "Enter your question or perspective...",
+    "characters": "Historical Figures",
+    "commentator": "Commentator",
+    "guide": "Guide",
+    "historicalBackground": "Historical Background"
+  },
   "share": {
     "notReady": "Available after generation completes"
   },
@@ -369,6 +378,7 @@
     "sceneTypeQuiz": "Quiz",
     "sceneTypeInteractive": "Interactive",
     "sceneTypePbl": "PBL",
+    "sceneTypeScenarioDialogue": "Scenario Dialogue",
     "sceneDescriptionPlaceholder": "Briefly describe the purpose and content of this scene",
     "quizQuestionCount": "Question count",
     "quizDifficulty": "Difficulty",
@@ -394,6 +404,14 @@
     "deleteSceneConfirmAction": "Delete",
     "collapseEditor": "Collapse",
     "quizConfigSummary": "{{count}} questions",
+    "scenarioDialogueConfigHint": "Configure Dialogue",
+    "scenarioDialogueConfigSummary": "{{count}} characters",
+    "scenarioDialogueTopic": "Historical Topic",
+    "scenarioDialogueTopicPlaceholder": "e.g. The Opium War",
+    "scenarioDialogueBackground": "Historical Background",
+    "scenarioDialogueBackgroundPlaceholder": "Brief historical context...",
+    "scenarioDialogueCharacters": "Historical Figures",
+    "scenarioDialogueCharacterPlaceholder": "Enter name, press Enter to add",
     "dragSceneHint": "Drag to reorder; or focus and press Ctrl/⌘ + ↑ / ↓",
     "deleteScene": "Delete scene",
     "backToRequirements": "Back to requirements",

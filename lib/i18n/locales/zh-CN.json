@@ -152,7 +152,8 @@
       "slide": "页",
       "quiz": "小测",
       "interactive": "互动",
-      "pbl": "项目"
+      "pbl": "项目",
+      "scenario-dialogue": "对话"
     },
     "quizScoreLabel": "答对 {{correct}} / {{total}}",
     "encouragement": {
@@ -291,6 +292,14 @@
       }
     }
   },
+  "scenarioDialogue": {
+    "waitingForDialogue": "等待对话开始...",
+    "inputPlaceholder": "输入你的问题或观点...",
+    "characters": "历史人物",
+    "commentator": "评论员",
+    "guide": "引导员",
+    "historicalBackground": "历史背景"
+  },
   "share": {
     "notReady": "生成完成后可分享"
   },
@@ -369,6 +378,7 @@
     "sceneTypeQuiz": "测验",
     "sceneTypeInteractive": "互动",
     "sceneTypePbl": "项目式学习",
+    "sceneTypeScenarioDialogue": "情境对话",
     "sceneDescriptionPlaceholder": "简短描述这个场景的目的和内容",
     "quizQuestionCount": "题目数量",
     "quizDifficulty": "难度",
@@ -394,6 +404,14 @@
     "deleteSceneConfirmAction": "删除",
     "collapseEditor": "收起",
     "quizConfigSummary": "{{count}} 道题",
+    "scenarioDialogueConfigHint": "配置情境对话",
+    "scenarioDialogueConfigSummary": "{{count}}位人物",
+    "scenarioDialogueTopic": "历史主题",
+    "scenarioDialogueTopicPlaceholder": "如：虎门销烟",
+    "scenarioDialogueBackground": "历史背景",
+    "scenarioDialogueBackgroundPlaceholder": "简要描述历史背景...",
+    "scenarioDialogueCharacters": "历史人物",
+    "scenarioDialogueCharacterPlaceholder": "输入人物名称，回车添加",
     "dragSceneHint": "拖动排序；或聚焦后按 Ctrl/⌘ + ↑ / ↓",
     "deleteScene": "删除场景",
     "backToRequirements": "返回修改需求",
