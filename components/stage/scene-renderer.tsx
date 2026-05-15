@@ -6,6 +6,7 @@ import { SlideEditor as SlideRenderer } from '../slide-renderer/Editor';
 import { QuizView } from '../scene-renderers/quiz-view';
 import { InteractiveRenderer } from '../scene-renderers/interactive-renderer';
 import { PBLRenderer } from '../scene-renderers/pbl-renderer';
+import { ScenarioDialogueRenderer } from '../scene-renderers/scenario-dialogue-renderer';
 
 interface SceneRendererProps {
   readonly scene: Scene;
@@ -27,6 +28,9 @@ export function SceneRenderer({ scene, mode }: SceneRendererProps) {
       case 'pbl':
         if (scene.content.type !== 'pbl') return <div>Invalid PBL content</div>;
         return <PBLRenderer content={scene.content} mode={mode} sceneId={scene.id} />;
+      case 'scenario-dialogue':
+        if (scene.content.type !== 'scenario-dialogue') return <div>Invalid scenario dialogue content</div>;
+        return <ScenarioDialogueRenderer content={scene.content} sceneId={scene.id} />;
       default:
         return <div>Unknown scene type</div>;
     }
