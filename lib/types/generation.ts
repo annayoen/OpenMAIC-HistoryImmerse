@@ -84,7 +84,7 @@ export interface WidgetOutline {
  */
 export interface SceneOutline {
   id: string;
-  type: 'slide' | 'quiz' | 'interactive' | 'pbl';
+  type: 'slide' | 'quiz' | 'interactive' | 'pbl' | 'scenario-dialogue';
   title: string;
   description: string; // 1-2 sentences describing the purpose
   keyPoints: string[]; // 3-5 core key points
@@ -122,6 +122,12 @@ export interface SceneOutline {
   // Widget fields (required for type === 'interactive' in unified mode)
   widgetType?: WidgetType;
   widgetOutline?: WidgetOutline;
+  // Scenario-dialogue-specific config
+  scenarioDialogueConfig?: {
+    topic: string;
+    historicalBackground: string;
+    characterNames: string[];
+  };
 }
 
 // ==================== Stage 3 Output: Generated Content ====================
@@ -154,6 +160,26 @@ import type { PBLProjectConfig } from '@/lib/pbl/types';
  */
 export interface GeneratedPBLContent {
   projectConfig: PBLProjectConfig;
+}
+
+// ==================== Scenario Dialogue Generation Types ====================
+
+import type { ScenarioDialogueAgentConfig } from './stage';
+
+/**
+ * AI-generated scenario dialogue content
+ */
+export interface GeneratedScenarioDialogueContent {
+  topic: string;
+  historicalBackground: string;
+  characters: ScenarioDialogueAgentConfig[];
+  commentator: ScenarioDialogueAgentConfig;
+  guide: ScenarioDialogueAgentConfig;
+  openingDialogue: Array<{
+    speakerId: string;
+    speakerName: string;
+    content: string;
+  }>;
 }
 
 // ==================== Interactive Generation Types ====================
