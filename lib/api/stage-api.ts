@@ -54,6 +54,7 @@ export {
   createDefaultQuizContent,
   createDefaultInteractiveContent,
   createDefaultPBLContent,
+  createDefaultScenarioDialogueContent,
 } from './stage-api-defaults';
 
 // Import sub-API factories
