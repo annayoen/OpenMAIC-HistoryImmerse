@@ -10,6 +10,7 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
+  GeneratedScenarioDialogueContent,
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
@@ -132,7 +133,8 @@ export function buildCompleteScene(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedScenarioDialogueContent,
   actions: Action[],
   stageId: string,
 ): Scene | null {
@@ -223,6 +225,28 @@ export function buildCompleteScene(
       content: {
         type: 'pbl',
         projectConfig: content.projectConfig,
+      },
+      actions,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+  }
+
+  if (outline.type === 'scenario-dialogue' && 'topic' in content) {
+    return {
+      id: sceneId,
+      stageId,
+      type: 'scenario-dialogue',
+      title: outline.title,
+      order: outline.order,
+      content: {
+        type: 'scenario-dialogue',
+        topic: content.topic,
+        historicalBackground: content.historicalBackground,
+        characters: content.characters,
+        commentator: content.commentator,
+        guide: content.guide,
+        openingDialogue: content.openingDialogue,
       },
       actions,
       createdAt: Date.now(),
