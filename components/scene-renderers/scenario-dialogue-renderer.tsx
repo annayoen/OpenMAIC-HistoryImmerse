@@ -7,9 +7,14 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import { useStreamingText } from '@/lib/hooks/use-streaming-text';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
 import { useSettingsStore } from '@/lib/store/settings';
+import { useStageStore } from '@/lib/store/stage';
 import { TTS_PROVIDERS } from '@/lib/audio/constants';
 import type { TTSProviderId } from '@/lib/audio/types';
 import { cn } from '@/lib/utils';
+import {
+  saveScenarioDialogueSession,
+  loadScenarioDialogueSession,
+} from '@/lib/utils/scenario-dialogue-storage';
 
 interface ScenarioDialogueRendererProps {
   readonly content: ScenarioDialogueContent;
@@ -195,8 +200,10 @@ function resolveVoiceForSpeaker(
   return voices[agentIndex % voices.length].id;
 }
 
-export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: ScenarioDialogueRendererProps) {
+export function ScenarioDialogueRenderer({ content, sceneId }: ScenarioDialogueRendererProps) {
   const { t } = useI18n();
+
+  const stageId = useStageStore((s) => s.stage?.id);
 
   const ttsProviderId = useSettingsStore((s) => s.ttsProviderId);
   const ttsSpeed = useSettingsStore((s) => s.ttsSpeed);
@@ -204,22 +211,27 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
   const ttsVolume = useSettingsStore((s) => s.ttsVolume);
   const ttsMuted = useSettingsStore((s) => s.ttsMuted);
 
-  const [messages, setMessages] = useState<DialogueMessage[]>(() =>
-    content.openingDialogue.map((line, index) => {
-      const speaker = [...content.characters, content.commentator, content.guide].find(
-        (c) => c.id === line.speakerId,
-      );
-      return {
-        id: `opening-${index}`,
-        speakerId: line.speakerId,
-        speakerName: line.speakerName,
-        speakerRole: speaker?.role || '',
-        speakerColor: speaker?.color || '#6b7280',
-        content: line.content,
-        timestamp: Date.now() + index,
-      };
-    }),
+  const buildOpeningMessages = useCallback(
+    () =>
+      content.openingDialogue.map((line, index) => {
+        const speaker = [...content.characters, content.commentator, content.guide].find(
+          (c) => c.id === line.speakerId,
+        );
+        return {
+          id: `opening-${index}`,
+          speakerId: line.speakerId,
+          speakerName: line.speakerName,
+          speakerRole: speaker?.role || '',
+          speakerColor: speaker?.color || '#6b7280',
+          content: line.content,
+          timestamp: Date.now() + index,
+        };
+      }),
+    [content],
   );
+
+  const [messages, setMessages] = useState<DialogueMessage[]>(() => buildOpeningMessages());
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
@@ -304,6 +316,51 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!stageId || !sceneId || messagesLoaded) return;
+
+    let cancelled = false;
+
+    loadScenarioDialogueSession(stageId, sceneId).then((session) => {
+      if (cancelled) return;
+      if (session && session.messages.length > 0) {
+        setMessages(session.messages);
+      }
+      setMessagesLoaded(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stageId, sceneId, messagesLoaded]);
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!stageId || !sceneId || !messagesLoaded) return;
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = setTimeout(() => {
+      saveScenarioDialogueSession({
+        id: `${stageId}:${sceneId}`,
+        stageId,
+        sceneId,
+        topic: content.topic,
+        historicalBackground: content.historicalBackground,
+        messages,
+      });
+    }, 2000);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [stageId, sceneId, messagesLoaded, messages, content.topic, content.historicalBackground]);
 
   const processTTSQueue = useCallback(async () => {
     if (isPlayingRef.current || ttsQueueRef.current.length === 0) return;
