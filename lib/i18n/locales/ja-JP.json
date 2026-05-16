@@ -45,7 +45,9 @@
     "exportSuccess": "エクスポートが完了しました",
     "exportFailed": "エクスポートに失敗しました",
     "classroomZip": "教室ZIPをエクスポート",
-    "classroomZipDesc": "コース構造 + メディアファイル"
+    "classroomZipDesc": "コース構造 + メディアファイル",
+    "dataJson": "データJSONをエクスポート",
+    "dataJsonDesc": "データ分析用の全教室データ"
   },
   "import": {
     "classroom": "教室をインポート",

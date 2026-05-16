@@ -43,6 +43,8 @@
     "resourcePackDesc": "PPTX + صفحات تفاعلية",
     "classroomZip": "تصدير ملف الفصل ZIP",
     "classroomZipDesc": "هيكل المقرر + ملفات الوسائط",
+    "dataJson": "تصدير بيانات JSON",
+    "dataJsonDesc": "بيانات الفصل الكاملة للتحليل",
     "exporting": "جارٍ التصدير...",
     "exportSuccess": "تم التصدير بنجاح",
     "exportFailed": "فشل التصدير"

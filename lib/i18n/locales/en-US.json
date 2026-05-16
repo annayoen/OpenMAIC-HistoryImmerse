@@ -45,7 +45,9 @@
     "exportSuccess": "Export successful",
     "exportFailed": "Export failed",
     "classroomZip": "Export Classroom ZIP",
-    "classroomZipDesc": "Course structure + media files"
+    "classroomZipDesc": "Course structure + media files",
+    "dataJson": "Export Data JSON",
+    "dataJsonDesc": "Full classroom data for mining & analysis"
   },
   "import": {
     "classroom": "Import Classroom",

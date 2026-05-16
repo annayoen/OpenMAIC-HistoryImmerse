@@ -45,7 +45,9 @@
     "exportSuccess": "Экспорт успешен",
     "exportFailed": "Ошибка экспорта",
     "classroomZip": "Экспорт ZIP класса",
-    "classroomZipDesc": "Структура курса + медиафайлы"
+    "classroomZipDesc": "Структура курса + медиафайлы",
+    "dataJson": "Экспорт данных JSON",
+    "dataJsonDesc": "Полные данные класса для анализа"
   },
   "import": {
     "classroom": "Импорт класса",

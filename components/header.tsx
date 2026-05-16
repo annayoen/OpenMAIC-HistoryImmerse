@@ -11,18 +11,21 @@ import {
   FileDown,
   Package,
   Archive,
+  FileJson,
 } from 'lucide-react';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { LanguageSwitcher } from './language-switcher';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { SettingsDialog } from './settings';
 import { cn } from '@/lib/utils';
 import { useStageStore } from '@/lib/store/stage';
 import { useMediaGenerationStore } from '@/lib/store/media-generation';
 import { useExportPPTX } from '@/lib/export/use-export-pptx';
 import { useExportClassroom } from '@/lib/export/use-export-classroom';
+import { exportStageData } from '@/lib/utils/database';
 
 interface HeaderProps {
   readonly currentSceneTitle: string;
@@ -39,7 +42,10 @@ export function Header({ currentSceneTitle }: HeaderProps) {
   const { exporting: isExporting, exportPPTX, exportResourcePack } = useExportPPTX();
   const { exporting: isExportingZip, exportClassroomZip } = useExportClassroom();
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [isExportingData, setIsExportingData] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+  const params = useParams();
+  const classroomId = params?.id as string | undefined;
   const scenes = useStageStore((s) => s.scenes);
   const generatingOutlines = useStageStore((s) => s.generatingOutlines);
   const failedOutlines = useStageStore((s) => s.failedOutlines);
@@ -50,6 +56,28 @@ export function Header({ currentSceneTitle }: HeaderProps) {
     generatingOutlines.length === 0 &&
     failedOutlines.length === 0 &&
     Object.values(mediaTasks).every((task) => task.status === 'done' || task.status === 'failed');
+
+  const handleExportData = useCallback(async () => {
+    if (!classroomId || isExportingData) return;
+    setIsExportingData(true);
+    try {
+      const data = await exportStageData(classroomId);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `classroom-data-${classroomId}-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export stage data:', err);
+    } finally {
+      setIsExportingData(false);
+      setExportMenuOpen(false);
+    }
+  }, [classroomId, isExportingData]);
 
   const themeRef = useRef<HTMLDivElement>(null);
 
@@ -125,7 +153,7 @@ export function Header({ currentSceneTitle }: HeaderProps) {
                   className={cn(
                     'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                     theme === 'light' &&
-                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
                   )}
                 >
                   <Sun className="w-4 h-4" />
@@ -139,7 +167,7 @@ export function Header({ currentSceneTitle }: HeaderProps) {
                   className={cn(
                     'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                     theme === 'dark' &&
-                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
                   )}
                 >
                   <Moon className="w-4 h-4" />
@@ -153,7 +181,7 @@ export function Header({ currentSceneTitle }: HeaderProps) {
                   className={cn(
                     'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2',
                     theme === 'system' &&
-                      'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
+                    'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400',
                   )}
                 >
                   <Monitor className="w-4 h-4" />
@@ -243,6 +271,24 @@ export function Header({ currentSceneTitle }: HeaderProps) {
                   <div>{t('export.classroomZip')}</div>
                   <div className="text-[11px] text-gray-400 dark:text-gray-500">
                     {t('export.classroomZipDesc')}
+                  </div>
+                </div>
+              </button>
+              <div className="h-[1px] bg-gray-200 dark:bg-gray-700 mx-2" />
+              <button
+                onClick={handleExportData}
+                disabled={isExportingData || !classroomId}
+                className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2.5 disabled:opacity-50"
+              >
+                {isExportingData ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
+                ) : (
+                  <FileJson className="w-4 h-4 text-gray-400 shrink-0" />
+                )}
+                <div>
+                  <div>{t('export.dataJson')}</div>
+                  <div className="text-[11px] text-gray-400 dark:text-gray-500">
+                    {t('export.dataJsonDesc')}
                   </div>
                 </div>
               </button>

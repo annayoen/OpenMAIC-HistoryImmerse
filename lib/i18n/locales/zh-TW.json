@@ -45,7 +45,9 @@
     "exportSuccess": "匯出成功",
     "exportFailed": "匯出失敗",
     "classroomZip": "匯出課堂 ZIP",
-    "classroomZipDesc": "課程結構 + 媒體檔案"
+    "classroomZipDesc": "課程結構 + 媒體檔案",
+    "dataJson": "匯出資料 JSON",
+    "dataJsonDesc": "課堂全量資料，用於資料探勘與分析"
   },
   "import": {
     "classroom": "匯入課堂",
