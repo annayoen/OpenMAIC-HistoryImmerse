@@ -234,6 +234,12 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
   const ttsEnabledRef = useRef(ttsEnabled);
   ttsEnabledRef.current = ttsEnabled;
 
+  const pendingQueueRef = useRef<DialogueMessage[]>([]);
+  const isProcessingQueueRef = useRef(false);
+  const currentStreamingIdRef = useRef<string | null>(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   const allAgents = useMemo(
     () => [...content.characters, content.commentator, content.guide],
     [content.characters, content.commentator, content.guide],
@@ -396,6 +402,25 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
     [ttsProviderId, ttsMuted, agentIndexMap],
   );
 
+  const processMessageQueue = useCallback(() => {
+    if (isProcessingQueueRef.current) return;
+    if (pendingQueueRef.current.length === 0) return;
+
+    isProcessingQueueRef.current = true;
+    const nextMsg = pendingQueueRef.current.shift()!;
+    currentStreamingIdRef.current = nextMsg.id;
+
+    setNewMessageIds((prev) => {
+      const next = new Set(prev);
+      next.add(nextMsg.id);
+      return next;
+    });
+    setMessages((prev) => [...prev, nextMsg]);
+  }, []);
+
+  const processMessageQueueRef = useRef(processMessageQueue);
+  processMessageQueueRef.current = processMessageQueue;
+
   const handleStreamComplete = useCallback(
     (messageId: string) => {
       setNewMessageIds((prev) => {
@@ -405,18 +430,31 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
       });
 
       if (ttsEnabled) {
-        const msg = messages.find((m) => m.id === messageId);
+        const msg = messagesRef.current.find((m) => m.id === messageId);
         if (msg && msg.speakerRole !== 'user') {
           enqueueTTS(messageId, msg.content, msg.speakerId, msg.speakerRole, msg.speakerName);
         }
       }
+
+      if (currentStreamingIdRef.current === messageId) {
+        currentStreamingIdRef.current = null;
+        isProcessingQueueRef.current = false;
+
+        setTimeout(() => {
+          processMessageQueueRef.current();
+        }, 1000);
+      }
     },
-    [messages, ttsEnabled, enqueueTTS],
+    [ttsEnabled, enqueueTTS],
   );
 
   const handleSend = useCallback(async () => {
     const trimmed = inputValue.trim();
     if (!trimmed || isLoading) return;
+
+    pendingQueueRef.current = [];
+    isProcessingQueueRef.current = false;
+    currentStreamingIdRef.current = null;
 
     const userMsg: DialogueMessage = {
       id: `user-${Date.now()}`,
@@ -497,12 +535,10 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
                 content: data.content,
                 timestamp: Date.now(),
               };
-              setNewMessageIds((prev) => {
-                const next = new Set(prev);
-                next.add(newMsg.id);
-                return next;
-              });
-              setMessages((prev) => [...prev, newMsg]);
+              pendingQueueRef.current.push(newMsg);
+              if (!isProcessingQueueRef.current) {
+                processMessageQueueRef.current();
+              }
             } else if (data.type === 'done') {
               // Stream complete
             } else if (data.type === 'error') {
