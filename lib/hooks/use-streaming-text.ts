@@ -31,10 +31,10 @@ export function useStreamingText(options: StreamingTextOptions): StreamingTextRe
   const frameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const lastIndexRef = useRef(0);
+  const onCompleteRef = useRef(onComplete);
+  // eslint-disable-next-line react-hooks/refs -- syncing ref with latest callback is the recommended pattern
+  onCompleteRef.current = onComplete;
 
-  /**
-   * Skip streaming animation and display all text immediately
-   */
   const skip = useCallback(() => {
     if (frameRef.current) {
       cancelAnimationFrame(frameRef.current);
@@ -44,12 +44,9 @@ export function useStreamingText(options: StreamingTextOptions): StreamingTextRe
     setIsStreaming(false);
     startTimeRef.current = null;
     lastIndexRef.current = text.length;
-    onComplete?.();
-  }, [text, onComplete]);
+    onCompleteRef.current?.();
+  }, [text]);
 
-  /**
-   * Reset streaming state
-   */
   const reset = useCallback(() => {
     if (frameRef.current) {
       cancelAnimationFrame(frameRef.current);
@@ -62,26 +59,21 @@ export function useStreamingText(options: StreamingTextOptions): StreamingTextRe
   }, []);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- Animation driver: synchronous state transitions are intentional for streaming text display */
-    // If streaming is disabled or text is empty, display all text immediately
     if (!enabled || !text) {
       setDisplayedText((prev) => (prev !== text ? text : prev));
       setIsStreaming((prev) => (prev ? false : prev));
       return;
     }
 
-    // Limit max text length (disable streaming for text over 500 characters)
     if (text.length > 500) {
       setDisplayedText(text);
       setIsStreaming(false);
-      onComplete?.();
+      onCompleteRef.current?.();
       return;
     }
 
-    // Start streaming display
     setIsStreaming(true);
     setDisplayedText('');
-    /* eslint-enable react-hooks/set-state-in-effect */
     lastIndexRef.current = 0;
 
     const animate = (timestamp: number) => {
@@ -102,7 +94,7 @@ export function useStreamingText(options: StreamingTextOptions): StreamingTextRe
       } else {
         setIsStreaming(false);
         startTimeRef.current = null;
-        onComplete?.();
+        onCompleteRef.current?.();
       }
     };
 
@@ -113,7 +105,7 @@ export function useStreamingText(options: StreamingTextOptions): StreamingTextRe
         cancelAnimationFrame(frameRef.current);
       }
     };
-  }, [text, speed, enabled, onComplete]);
+  }, [text, speed, enabled]);
 
   return {
     displayedText,

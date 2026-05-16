@@ -27,7 +27,8 @@ export type PromptId =
   | 'agent-system-wb-student'
   | 'director'
   | 'pbl-design'
-  | 'scenario-dialogue-content';
+  | 'scenario-dialogue-content'
+  | 'scenario-dialogue-chat';
 
 /**
  * Snippet identifier

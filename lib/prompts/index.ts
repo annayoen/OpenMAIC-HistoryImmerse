@@ -46,4 +46,5 @@ export const PROMPT_IDS = {
   DIRECTOR: 'director',
   PBL_DESIGN: 'pbl-design',
   SCENARIO_DIALOGUE_CONTENT: 'scenario-dialogue-content',
+  SCENARIO_DIALOGUE_CHAT: 'scenario-dialogue-chat',
 } as const satisfies Record<string, PromptId>;

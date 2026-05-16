@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { ArrowUp, Users, MessageSquare, BookOpen, Lightbulb, Volume2, VolumeX } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { ArrowUp, MessageSquare, Volume2, VolumeX } from 'lucide-react';
 import type { ScenarioDialogueContent } from '@/lib/types/stage';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { useStreamingText } from '@/lib/hooks/use-streaming-text';
 import { getCurrentModelConfig } from '@/lib/utils/model-config';
+import { useSettingsStore } from '@/lib/store/settings';
+import { TTS_PROVIDERS } from '@/lib/audio/constants';
+import type { TTSProviderId } from '@/lib/audio/types';
 import { cn } from '@/lib/utils';
 
 interface ScenarioDialogueRendererProps {
@@ -54,19 +57,6 @@ function AgentAvatar({
   );
 }
 
-function getVoiceConfig(role: string, name: string): { rate: number; pitch: number } {
-  if (role === 'commentator') {
-    return { rate: 0.85, pitch: 0.9 };
-  }
-  if (role === 'guide') {
-    return { rate: 1.05, pitch: 1.15 };
-  }
-  if (name.includes('女') || name.includes('后') || name.includes('妃')) {
-    return { rate: 1.0, pitch: 1.2 };
-  }
-  return { rate: 1.0, pitch: 1.0 };
-}
-
 function DialogueBubble({
   msg,
   isNew,
@@ -76,17 +66,23 @@ function DialogueBubble({
   msg: DialogueMessage;
   isNew: boolean;
   onStreamComplete: (id: string) => void;
-  getRoleLabel: (role: string) => string;
+  getRoleLabel: (speakerId: string, speakerRole: string) => string;
 }) {
+  const onCompleteRef = useRef(onStreamComplete);
+  // eslint-disable-next-line react-hooks/refs -- syncing ref with latest callback is the recommended pattern
+  onCompleteRef.current = onStreamComplete;
+
+  const stableOnComplete = useCallback(() => {
+    if (isNew) {
+      onCompleteRef.current(msg.id);
+    }
+  }, [isNew, msg.id]);
+
   const { displayedText, isStreaming } = useStreamingText({
     text: msg.content,
-    speed: 40,
+    speed: 50,
     enabled: isNew,
-    onComplete: () => {
-      if (isNew) {
-        onStreamComplete(msg.id);
-      }
-    },
+    onComplete: stableOnComplete,
   });
 
   const displayContent = isNew ? displayedText : msg.content;
@@ -102,7 +98,7 @@ function DialogueBubble({
         <AgentAvatar
           name={msg.speakerName}
           color={msg.speakerColor}
-          role={getRoleLabel(msg.speakerRole)}
+          role={getRoleLabel(msg.speakerId, msg.speakerRole)}
           size="md"
         />
       )}
@@ -118,7 +114,7 @@ function DialogueBubble({
             className="text-[10px] px-1.5 py-0.5 rounded-full text-white"
             style={{ backgroundColor: msg.speakerColor }}
           >
-            {getRoleLabel(msg.speakerRole)}
+            {getRoleLabel(msg.speakerId, msg.speakerRole)}
           </span>
           {isStreaming && (
             <span className="text-[10px] text-muted-foreground animate-pulse">输入中...</span>
@@ -144,7 +140,7 @@ function DialogueBubble({
         <AgentAvatar
           name={msg.speakerName}
           color={msg.speakerColor}
-          role={getRoleLabel(msg.speakerRole)}
+          role={getRoleLabel(msg.speakerId, msg.speakerRole)}
           size="md"
         />
       )}
@@ -152,8 +148,62 @@ function DialogueBubble({
   );
 }
 
+function resolveVoiceForSpeaker(
+  speakerId: string,
+  speakerRole: string,
+  speakerName: string,
+  agentIndex: number,
+  providerId: TTSProviderId,
+): string {
+  const provider = TTS_PROVIDERS[providerId as keyof typeof TTS_PROVIDERS];
+  if (!provider || provider.voices.length === 0) {
+    return 'default';
+  }
+
+  const voices = provider.voices;
+
+  if (speakerRole === 'commentator') {
+    const maleVoices = voices.filter((v) => v.gender === 'male');
+    if (maleVoices.length > 0) return maleVoices[0].id;
+    return voices[1]?.id || voices[0].id;
+  }
+
+  if (speakerRole === 'guide') {
+    const femaleVoices = voices.filter((v) => v.gender === 'female');
+    if (femaleVoices.length > 0) return femaleVoices[femaleVoices.length - 1].id;
+    return voices[2]?.id || voices[0].id;
+  }
+
+  const isFemale =
+    speakerName.includes('女') ||
+    speakerName.includes('后') ||
+    speakerName.includes('妃') ||
+    speakerName.includes('夫人') ||
+    speakerName.includes('娘');
+  if (isFemale) {
+    const femaleVoices = voices.filter((v) => v.gender === 'female');
+    if (femaleVoices.length > 0) {
+      return femaleVoices[agentIndex % femaleVoices.length].id;
+    }
+  }
+
+  const maleVoices = voices.filter((v) => v.gender === 'male');
+  if (maleVoices.length > 0) {
+    return maleVoices[agentIndex % maleVoices.length].id;
+  }
+
+  return voices[agentIndex % voices.length].id;
+}
+
 export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: ScenarioDialogueRendererProps) {
   const { t } = useI18n();
+
+  const ttsProviderId = useSettingsStore((s) => s.ttsProviderId);
+  const ttsSpeed = useSettingsStore((s) => s.ttsSpeed);
+  const ttsProvidersConfig = useSettingsStore((s) => s.ttsProvidersConfig);
+  const ttsVolume = useSettingsStore((s) => s.ttsVolume);
+  const ttsMuted = useSettingsStore((s) => s.ttsMuted);
+
   const [messages, setMessages] = useState<DialogueMessage[]>(() =>
     content.openingDialogue.map((line, index) => {
       const speaker = [...content.characters, content.commentator, content.guide].find(
@@ -178,22 +228,66 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const ttsQueueRef = useRef<Array<{ messageId: string; text: string; voice: string; agentIndex: number; speakerId: string; speakerRole: string; speakerName: string }>>([]);
+  const isPlayingRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsEnabledRef = useRef(ttsEnabled);
+  ttsEnabledRef.current = ttsEnabled;
+
+  const allAgents = useMemo(
+    () => [...content.characters, content.commentator, content.guide],
+    [content.characters, content.commentator, content.guide],
+  );
+
+  const agentIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    allAgents.forEach((agent, i) => map.set(agent.id, i));
+    return map;
+  }, [allAgents]);
+
+  const agentById = useMemo(() => {
+    const map = new Map<string, (typeof allAgents)[number]>();
+    allAgents.forEach((a) => map.set(a.id, a));
+    return map;
+  }, [allAgents]);
+
+  const getRoleLabel = useCallback(
+    (speakerId: string, speakerRole: string) => {
+      if (speakerRole === 'commentator') return '历史评论员';
+      if (speakerRole === 'guide') return '学习引导员';
+      if (speakerRole === 'user') return '我';
+      if (speakerRole === 'character') {
+        const agent = agentById.get(speakerId);
+        return agent?.role || '历史人物';
+      }
+      return speakerRole;
+    },
+    [agentById],
+  );
+
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      const container = messagesContainerRef.current;
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth',
+      });
     }
   }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, scrollToBottom]);
+  }, [messages.length, scrollToBottom]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const observer = new MutationObserver(() => {
-      scrollToBottom();
+      if (messagesContainerRef.current) {
+        const el = messagesContainerRef.current;
+        el.scrollTop = el.scrollHeight;
+      }
     });
 
     observer.observe(container, {
@@ -203,21 +297,104 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
     });
 
     return () => observer.disconnect();
-  }, [scrollToBottom]);
+  }, []);
 
-  const allAgents = [...content.characters, content.commentator, content.guide];
+  const processTTSQueue = useCallback(async () => {
+    if (isPlayingRef.current || ttsQueueRef.current.length === 0) return;
+    if (!ttsEnabledRef.current || ttsMuted) {
+      ttsQueueRef.current = [];
+      return;
+    }
 
-  const getAgentIcon = (role: string) => {
-    if (role === 'commentator') return <BookOpen className="w-4 h-4" />;
-    if (role === 'guide') return <Lightbulb className="w-4 h-4" />;
-    return <Users className="w-4 h-4" />;
-  };
+    isPlayingRef.current = true;
+    const item = ttsQueueRef.current.shift()!;
 
-  const getRoleLabel = (role: string) => {
-    if (role === 'commentator') return '历史评论员';
-    if (role === 'guide') return '学习引导员';
-    return role;
-  };
+    const providerConfig = ttsProvidersConfig[ttsProviderId];
+    const effectiveSpeed = Math.min(ttsSpeed * 1.3, 4.0);
+
+    try {
+      const res = await fetch('/api/generate/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: item.text,
+          audioId: `scenario-${item.messageId}`,
+          ttsProviderId,
+          ttsModelId: providerConfig?.modelId,
+          ttsVoice: item.voice,
+          ttsSpeed: effectiveSpeed,
+          ttsApiKey: providerConfig?.apiKey,
+          ttsBaseUrl:
+            providerConfig?.serverBaseUrl ||
+            providerConfig?.baseUrl ||
+            providerConfig?.customDefaultBaseUrl,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`TTS API error: ${res.status}`);
+
+      const data = await res.json();
+      if (!data.base64) throw new Error('No audio in response');
+
+      const audioUrl = `data:audio/${data.format || 'mp3'};base64,${data.base64}`;
+      const audio = new Audio(audioUrl);
+      audio.volume = ttsMuted ? 0 : ttsVolume;
+      audioRef.current = audio;
+
+      await new Promise<void>((resolve, reject) => {
+        audio.addEventListener('ended', () => {
+          audioRef.current = null;
+          resolve();
+        });
+        audio.addEventListener('error', () => {
+          audioRef.current = null;
+          reject(new Error('Audio playback error'));
+        });
+        audio.play().catch(reject);
+      });
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error('[ScenarioDialogue] TTS failed:', err);
+      }
+      audioRef.current = null;
+    } finally {
+      isPlayingRef.current = false;
+      processTTSQueue();
+    }
+  }, [ttsProviderId, ttsSpeed, ttsProvidersConfig, ttsVolume, ttsMuted]);
+
+  const processTTSQueueRef = useRef(processTTSQueue);
+  processTTSQueueRef.current = processTTSQueue;
+
+  const enqueueTTS = useCallback(
+    (messageId: string, text: string, speakerId: string, speakerRole: string, speakerName: string) => {
+      if (!ttsEnabledRef.current || ttsMuted || !text.trim()) return;
+
+      const agentIndex = agentIndexMap.get(speakerId) ?? 0;
+      const voice = resolveVoiceForSpeaker(
+        speakerId,
+        speakerRole,
+        speakerName,
+        agentIndex,
+        ttsProviderId,
+      );
+
+      ttsQueueRef.current.push({
+        messageId,
+        text,
+        voice,
+        agentIndex,
+        speakerId,
+        speakerRole,
+        speakerName,
+      });
+
+      if (!isPlayingRef.current) {
+        processTTSQueueRef.current();
+      }
+    },
+    [ttsProviderId, ttsMuted, agentIndexMap],
+  );
 
   const handleStreamComplete = useCallback(
     (messageId: string) => {
@@ -230,26 +407,11 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
       if (ttsEnabled) {
         const msg = messages.find((m) => m.id === messageId);
         if (msg && msg.speakerRole !== 'user') {
-          const voiceConfig = getVoiceConfig(msg.speakerRole, msg.speakerName);
-          const utterance = new SpeechSynthesisUtterance(msg.content);
-          utterance.lang = 'zh-CN';
-          utterance.rate = voiceConfig.rate;
-          utterance.pitch = voiceConfig.pitch;
-
-          const voices = window.speechSynthesis.getVoices();
-          const zhVoice = voices.find(
-            (v) => v.lang.startsWith('zh') && (voiceConfig.pitch > 1.0 ? v.name.includes('Female') || v.name.includes('女') : true),
-          );
-          if (zhVoice) {
-            utterance.voice = zhVoice;
-          }
-
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(utterance);
+          enqueueTTS(messageId, msg.content, msg.speakerId, msg.speakerRole, msg.speakerName);
         }
       }
     },
-    [messages, ttsEnabled],
+    [messages, ttsEnabled, enqueueTTS],
   );
 
   const handleSend = useCallback(async () => {
@@ -376,6 +538,31 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
     }
   }, []);
 
+  const handleToggleTTS = useCallback(() => {
+    setTtsEnabled((prev) => {
+      if (prev) {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        ttsQueueRef.current = [];
+        isPlayingRef.current = false;
+      }
+      return !prev;
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      ttsQueueRef.current = [];
+      isPlayingRef.current = false;
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Historical Background Header */}
@@ -395,7 +582,7 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
             <div
               key={agent.id}
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background border shadow-sm shrink-0"
-              title={getRoleLabel(agent.role)}
+              title={getRoleLabel(agent.id, agent.role)}
             >
               <AgentAvatar name={agent.name} color={agent.color} role={agent.role} size="sm" />
               <div className="text-xs font-medium whitespace-nowrap">{agent.name}</div>
@@ -449,7 +636,7 @@ export function ScenarioDialogueRenderer({ content, sceneId: _sceneId }: Scenari
                 ? 'bg-primary/10 text-primary hover:bg-primary/20'
                 : 'bg-muted text-muted-foreground hover:bg-muted/80',
             )}
-            onClick={() => setTtsEnabled(!ttsEnabled)}
+            onClick={handleToggleTTS}
             title={ttsEnabled ? '关闭语音播放' : '开启语音播放'}
           >
             {ttsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}

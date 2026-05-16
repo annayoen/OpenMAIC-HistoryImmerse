@@ -11,6 +11,7 @@ import { streamLLM } from '@/lib/ai/llm';
 import { createLogger } from '@/lib/logger';
 import { apiError } from '@/lib/server/api-response';
 import { resolveModelFromRequest } from '@/lib/server/resolve-model';
+import { loadPrompt, interpolateVariables } from '@/lib/prompts';
 
 const log = createLogger('ScenarioDialogueChat');
 
@@ -53,13 +54,34 @@ export async function POST(req: NextRequest) {
 
     const { model: languageModel, thinkingConfig } = await resolveModelFromRequest(req, body);
 
-    const allAgents = [...characters, commentator, guide];
+    const allAgents = [
+      ...characters.map((c) => ({ ...c, speakerRole: 'character' as const })),
+      { ...commentator, speakerRole: 'commentator' as const },
+      { ...guide, speakerRole: 'guide' as const },
+    ];
     const agentsDesc = allAgents
       .map(
         (a) =>
-          `- ${a.name} (${a.id}, role: ${a.role}): ${a.persona || 'No persona specified'}`,
+          `- ${a.name} (id: ${a.id}, speakerRole: ${a.speakerRole}, historicalRole: ${a.role}): ${a.persona || 'No persona specified'}`,
       )
       .join('\n');
+
+    const nameToId = new Map<string, string>();
+    allAgents.forEach((a) => nameToId.set(a.name, a.id));
+
+    const resolveSpeakerId = (msg: Record<string, unknown>): string | undefined => {
+      if (msg.speakerId && typeof msg.speakerId === 'string' && msg.speakerId.trim()) {
+        return msg.speakerId;
+      }
+      if (msg.speakerName && typeof msg.speakerName === 'string') {
+        const id = nameToId.get(msg.speakerName);
+        if (id) {
+          log.warn(`Message missing speakerId, resolved from speakerName: "${msg.speakerName}" -> "${id}"`);
+          return id;
+        }
+      }
+      return undefined;
+    };
 
     const historyText =
       messages.length > 0
@@ -69,40 +91,22 @@ export async function POST(req: NextRequest) {
           .join('\n')
         : '(对话尚未开始)';
 
-    const systemPrompt = `你是一个专业的历史情境对话生成器。你需要根据用户的问题，生成2-5轮多角色历史讨论对话。
+    const prompt = loadPrompt('scenario-dialogue-chat');
+    const systemPrompt = prompt
+      ? interpolateVariables(prompt.systemPrompt, {
+        topic,
+        historicalBackground,
+        agentsDesc,
+        historyText,
+      })
+      : '';
+    const userPrompt = prompt
+      ? interpolateVariables(prompt.userPromptTemplate, { userMessage })
+      : '';
 
-## 场景信息
-主题：${topic}
-历史背景：${historicalBackground}
-
-## 角色信息
-${agentsDesc}
-
-## 对话历史
-${historyText}
-
-## 规则
-1. 生成2-5轮讨论（由你根据话题复杂度自行决定），每轮1-3个角色发言
-2. 角色必须基于其 persona 以第一人称发言，语言风格要符合其历史身份和性格
-3. 评论员(commentator)应提供客观分析和历史背景补充
-4. 引导员(guide)应适时提出启发性问题，引导讨论深入
-5. 必须直接回应用户的问题或观点
-6. 讨论要有深度，展现不同视角的碰撞
-
-## 输出格式
-严格按照以下JSON数组格式输出，每个元素是一条消息：
-[
-  {"speakerId": "角色ID", "speakerName": "角色名", "speakerRole": "角色类型", "content": "发言内容"},
-  ...
-]
-
-注意：
-- speakerId 必须使用上面角色信息中列出的 id
-- speakerRole 为 character、commentator 或 guide
-- 每轮讨论之间要有逻辑递进关系
-- 最后一条消息由引导员总结并邀请用户继续参与`;
-
-    const userPrompt = `用户说：${userMessage}\n\n请生成多轮讨论对话。`;
+    if (!systemPrompt) {
+      return apiError('INTERNAL_ERROR', 500, 'Failed to load prompt template');
+    }
 
     log.info(`Generating scenario dialogue: topic="${topic}", userMessage="${userMessage.slice(0, 50)}..."`);
 
@@ -122,10 +126,19 @@ ${historyText}
       async start(controller) {
         let buffer = '';
         let closed = false;
+        const seenRoles = new Set<string>();
+        let messageCount = 0;
 
         const safeEnqueue = (data: Uint8Array) => {
           if (!closed) {
             controller.enqueue(data);
+          }
+        };
+
+        const trackMessage = (msg: Record<string, unknown>) => {
+          messageCount++;
+          if (msg.speakerRole && typeof msg.speakerRole === 'string') {
+            seenRoles.add(msg.speakerRole);
           }
         };
 
@@ -136,61 +149,107 @@ ${historyText}
           }
         };
 
+        const extractCompleteJSONObjects = (text: string): { objects: string[]; remainder: string } => {
+          const objects: string[] = [];
+          let depth = 0;
+          let start = -1;
+          let inString = false;
+          let escape = false;
+
+          for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+
+            if (inString) {
+              if (escape) {
+                escape = false;
+              } else if (ch === '\\') {
+                escape = true;
+              } else if (ch === '"') {
+                inString = false;
+              }
+              continue;
+            }
+
+            if (ch === '"') {
+              inString = true;
+              continue;
+            }
+
+            if (ch === '{') {
+              if (depth === 0) start = i;
+              depth++;
+            } else if (ch === '}') {
+              depth--;
+              if (depth === 0 && start >= 0) {
+                objects.push(text.slice(start, i + 1));
+                start = -1;
+              }
+            }
+          }
+
+          const remainder = start >= 0 ? text.slice(start) : '';
+          return { objects, remainder };
+        };
+
         try {
           for await (const chunk of result.textStream) {
             if (chunk) {
               buffer += chunk;
 
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || '';
+              const { objects, remainder } = extractCompleteJSONObjects(buffer);
+              buffer = remainder;
 
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed) continue;
-
+              for (const obj of objects) {
                 try {
-                  const parsed = JSON.parse(trimmed);
-                  if (Array.isArray(parsed)) {
-                    for (const msg of parsed) {
-                      if (msg.speakerId && msg.content) {
-                        safeEnqueue(
-                          encoder.encode(
-                            `data: ${JSON.stringify({ type: 'message', ...msg })}\n\n`,
-                          ),
-                        );
-                      }
-                    }
-                  } else if (parsed.speakerId && parsed.content) {
+                  const parsed = JSON.parse(obj);
+                  const speakerId = resolveSpeakerId(parsed);
+                  if (speakerId && parsed.content) {
+                    trackMessage(parsed);
                     safeEnqueue(
                       encoder.encode(
-                        `data: ${JSON.stringify({ type: 'message', ...parsed })}\n\n`,
+                        `data: ${JSON.stringify({ type: 'message', speakerId, ...parsed })}\n\n`,
                       ),
                     );
+                  } else if (parsed.content) {
+                    log.warn('Dropping message: no speakerId and cannot resolve from speakerName', parsed);
                   }
                 } catch {
-                  // Partial JSON, continue buffering
+                  log.warn('Failed to parse extracted JSON object:', obj.slice(0, 100));
                 }
               }
             }
           }
 
-          // Try to parse remaining buffer
           if (buffer.trim()) {
             try {
               const parsed = JSON.parse(buffer.trim());
               const messages = Array.isArray(parsed) ? parsed : [parsed];
               for (const msg of messages) {
-                if (msg.speakerId && msg.content) {
+                const speakerId = resolveSpeakerId(msg);
+                if (speakerId && msg.content) {
+                  trackMessage(msg);
                   safeEnqueue(
                     encoder.encode(
-                      `data: ${JSON.stringify({ type: 'message', ...msg })}\n\n`,
+                      `data: ${JSON.stringify({ type: 'message', speakerId, ...msg })}\n\n`,
                     ),
                   );
+                } else if (msg.content) {
+                  log.warn('Dropping final message: no speakerId and cannot resolve from speakerName', msg);
                 }
               }
             } catch {
               log.warn('Failed to parse final buffer:', buffer.slice(0, 200));
             }
+          }
+
+          const hasCharacter = seenRoles.has('character');
+          const hasCommentator = seenRoles.has('commentator');
+          const hasGuide = seenRoles.has('guide');
+          if (!hasCharacter || !hasCommentator || !hasGuide) {
+            log.warn(
+              `Incomplete dialogue output: ${messageCount} messages, roles seen: [${[...seenRoles].join(', ')}]. ` +
+              `Missing: ${!hasCharacter ? 'character ' : ''}${!hasCommentator ? 'commentator ' : ''}${!hasGuide ? 'guide ' : ''}`,
+            );
           }
 
           safeEnqueue(encoder.encode('data: {"type":"done"}\n\n'));
