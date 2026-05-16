@@ -10,6 +10,12 @@ import type {
 } from '@/lib/types/chat';
 import type { SceneOutline } from '@/lib/types/generation';
 import type { UIMessage } from 'ai';
+import type { QuestionResult } from '@/lib/quiz/grading';
+import {
+  DRAFT_KEY_PREFIX,
+  ANSWERS_KEY_PREFIX,
+  RESULTS_KEY_PREFIX,
+} from '@/lib/quiz/persistence';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('Database');
@@ -186,6 +192,30 @@ export interface VoiceProfileRecord {
   updatedAt: number;
 }
 
+/**
+ * ScenarioDialogueSession table - Scenario dialogue session data
+ */
+export interface ScenarioDialogueSessionRecord {
+  id: string;
+  stageId: string;
+  sceneId: string;
+  topic: string;
+  historicalBackground: string;
+  messages: ScenarioDialogueMessageRecord[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ScenarioDialogueMessageRecord {
+  id: string;
+  speakerId: string;
+  speakerName: string;
+  speakerRole: string;
+  speakerColor: string;
+  content: string;
+  timestamp: number;
+}
+
 /** Build the compound primary key for mediaFiles: `${stageId}:${elementId}` */
 export function mediaFileKey(stageId: string, elementId: string): string {
   return `${stageId}:${elementId}`;
@@ -194,7 +224,7 @@ export function mediaFileKey(stageId: string, elementId: string): string {
 // ==================== Database Definition ====================
 
 const DATABASE_NAME = 'MAIC-Database';
-const _DATABASE_VERSION = 10;
+const _DATABASE_VERSION = 11;
 
 /**
  * MAIC Database Instance
@@ -212,6 +242,7 @@ class MAICDatabase extends Dexie {
   mediaFiles!: EntityTable<MediaFileRecord, 'id'>;
   generatedAgents!: EntityTable<GeneratedAgentRecord, 'id'>;
   voiceProfiles!: EntityTable<VoiceProfileRecord, 'id'>;
+  scenarioDialogueSessions!: EntityTable<ScenarioDialogueSessionRecord, 'id'>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -378,6 +409,22 @@ class MAICDatabase extends Dexie {
       generatedAgents: 'id, stageId',
       voiceProfiles: 'id, providerId, kind, updatedAt',
     });
+
+    // Version 11: Add scenarioDialogueSessions table for scenario dialogue persistence
+    this.version(11).stores({
+      stages: 'id, updatedAt',
+      scenes: 'id, stageId, order, [stageId+order]',
+      audioFiles: 'id, createdAt',
+      imageFiles: 'id, createdAt',
+      snapshots: '++id',
+      chatSessions: 'id, stageId, [stageId+createdAt]',
+      playbackState: 'stageId',
+      stageOutlines: 'stageId',
+      mediaFiles: 'id, stageId, [stageId+type]',
+      generatedAgents: 'id, stageId',
+      voiceProfiles: 'id, providerId, kind, updatedAt',
+      scenarioDialogueSessions: 'id, stageId, sceneId, [stageId+createdAt]',
+    });
   }
 }
 
@@ -413,18 +460,28 @@ export async function clearDatabase(): Promise<void> {
 }
 
 /**
- * Export database contents (for backup)
+ * Export database contents (for backup / data mining)
+ *
+ * Includes all tables relevant to classroom analysis:
+ * stages, scenes, chatSessions, scenarioDialogueSessions,
+ * stageOutlines, generatedAgents, playbackState
  */
 export async function exportDatabase(): Promise<{
   stages: StageRecord[];
   scenes: SceneRecord[];
   chatSessions: ChatSessionRecord[];
+  scenarioDialogueSessions: ScenarioDialogueSessionRecord[];
+  stageOutlines: StageOutlinesRecord[];
+  generatedAgents: GeneratedAgentRecord[];
   playbackState: PlaybackStateRecord[];
 }> {
   return {
     stages: await db.stages.toArray(),
     scenes: await db.scenes.toArray(),
     chatSessions: await db.chatSessions.toArray(),
+    scenarioDialogueSessions: await db.scenarioDialogueSessions.toArray(),
+    stageOutlines: await db.stageOutlines.toArray(),
+    generatedAgents: await db.generatedAgents.toArray(),
     playbackState: await db.playbackState.toArray(),
   };
 }
@@ -436,19 +493,100 @@ export async function importDatabase(data: {
   stages?: StageRecord[];
   scenes?: SceneRecord[];
   chatSessions?: ChatSessionRecord[];
+  scenarioDialogueSessions?: ScenarioDialogueSessionRecord[];
+  stageOutlines?: StageOutlinesRecord[];
+  generatedAgents?: GeneratedAgentRecord[];
   playbackState?: PlaybackStateRecord[];
 }): Promise<void> {
   await db.transaction(
     'rw',
-    [db.stages, db.scenes, db.chatSessions, db.playbackState],
+    [
+      db.stages,
+      db.scenes,
+      db.chatSessions,
+      db.scenarioDialogueSessions,
+      db.stageOutlines,
+      db.generatedAgents,
+      db.playbackState,
+    ],
     async () => {
       if (data.stages) await db.stages.bulkPut(data.stages);
       if (data.scenes) await db.scenes.bulkPut(data.scenes);
       if (data.chatSessions) await db.chatSessions.bulkPut(data.chatSessions);
+      if (data.scenarioDialogueSessions)
+        await db.scenarioDialogueSessions.bulkPut(data.scenarioDialogueSessions);
+      if (data.stageOutlines) await db.stageOutlines.bulkPut(data.stageOutlines);
+      if (data.generatedAgents) await db.generatedAgents.bulkPut(data.generatedAgents);
       if (data.playbackState) await db.playbackState.bulkPut(data.playbackState);
     },
   );
   log.info('Database imported successfully');
+}
+
+// ==================== Stage Data Export (for data mining) ====================
+
+export interface QuizExportEntry {
+  sceneId: string;
+  draft: Record<string, string | string[]> | null;
+  answers: Record<string, string | string[]> | null;
+  results: QuestionResult[] | null;
+}
+
+export interface StageExportData {
+  exportedAt: number;
+  stage: StageRecord;
+  scenes: SceneRecord[];
+  stageOutlines: StageOutlinesRecord | null;
+  chatSessions: ChatSessionRecord[];
+  scenarioDialogueSessions: ScenarioDialogueSessionRecord[];
+  generatedAgents: GeneratedAgentRecord[];
+  quizData: QuizExportEntry[];
+}
+
+function safeGetJSON(key: string): unknown {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function exportStageData(stageId: string): Promise<StageExportData> {
+  const [stage, scenes, outlines, chatSessions, scenarioSessions, agents] =
+    await Promise.all([
+      db.stages.get(stageId),
+      db.scenes.where('stageId').equals(stageId).toArray(),
+      db.stageOutlines.get(stageId),
+      db.chatSessions.where('stageId').equals(stageId).toArray(),
+      db.scenarioDialogueSessions.where('stageId').equals(stageId).toArray(),
+      db.generatedAgents.where('stageId').equals(stageId).toArray(),
+    ]);
+
+  if (!stage) {
+    throw new Error(`Stage ${stageId} not found`);
+  }
+
+  const quizData: QuizExportEntry[] = scenes
+    .filter((s) => s.type === 'quiz')
+    .map((s) => ({
+      sceneId: s.id,
+      draft: safeGetJSON(DRAFT_KEY_PREFIX + s.id) as Record<string, string | string[]> | null,
+      answers: safeGetJSON(ANSWERS_KEY_PREFIX + s.id) as Record<string, string | string[]> | null,
+      results: safeGetJSON(RESULTS_KEY_PREFIX + s.id) as QuestionResult[] | null,
+    }));
+
+  return {
+    exportedAt: Date.now(),
+    stage,
+    scenes,
+    stageOutlines: outlines ?? null,
+    chatSessions,
+    scenarioDialogueSessions: scenarioSessions,
+    generatedAgents: agents,
+    quizData,
+  };
 }
 
 // ==================== Convenience Query Functions ====================
@@ -474,6 +612,7 @@ export async function deleteStageWithRelatedData(stageId: string): Promise<void>
       db.stageOutlines,
       db.mediaFiles,
       db.generatedAgents,
+      db.scenarioDialogueSessions,
     ],
     async () => {
       await db.stages.delete(stageId);
@@ -483,6 +622,7 @@ export async function deleteStageWithRelatedData(stageId: string): Promise<void>
       await db.stageOutlines.delete(stageId);
       await db.mediaFiles.where('stageId').equals(stageId).delete();
       await db.generatedAgents.where('stageId').equals(stageId).delete();
+      await db.scenarioDialogueSessions.where('stageId').equals(stageId).delete();
     },
   );
 }
@@ -511,5 +651,6 @@ export async function getDatabaseStats() {
     stageOutlines: await db.stageOutlines.count(),
     mediaFiles: await db.mediaFiles.count(),
     generatedAgents: await db.generatedAgents.count(),
+    scenarioDialogueSessions: await db.scenarioDialogueSessions.count(),
   };
 }
